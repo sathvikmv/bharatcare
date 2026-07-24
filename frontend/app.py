@@ -1,14 +1,17 @@
+import os
 import streamlit as st
 import requests
 
 # -----------------------------------------------
-# BACKEND URL — reads from Streamlit secrets or
-# falls back to local dev server
+# BACKEND URL — priority order:
+#   1. Streamlit secrets (Streamlit Cloud)
+#   2. Environment variable (Render / Railway)
+#   3. Local dev fallback
 # -----------------------------------------------
 try:
     BASE_URL = st.secrets["BACKEND_URL"].rstrip("/")
 except Exception:
-    BASE_URL = "http://127.0.0.1:8000"
+    BASE_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:8000").rstrip("/")
 
 DEFAULT_USERNAME = "default_user"
 

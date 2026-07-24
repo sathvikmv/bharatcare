@@ -1,0 +1,37 @@
+services:
+  # ─────────────────────────────────────────
+  # 1. FastAPI Backend
+  # ─────────────────────────────────────────
+  - type: web
+    name: ai-agent-backend
+    runtime: python
+    rootDir: .
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: CHATBOT_DB_PATH
+        value: /opt/render/project/src/backend/chatbot.db
+    autoDeploy: true
+    plan: free
+
+  # ─────────────────────────────────────────
+  # 2. Streamlit Frontend
+  # ─────────────────────────────────────────
+  - type: web
+    name: ai-agent-frontend
+    runtime: python
+    rootDir: .
+    buildCommand: pip install -r frontend/requirements.txt
+    startCommand: streamlit run frontend/app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: BACKEND_URL
+        fromService:
+          name: ai-agent-backend
+          type: web
+          property: host
+    autoDeploy: true
+    plan: free

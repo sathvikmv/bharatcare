@@ -16,13 +16,32 @@ except Exception:
         "https://ai-agent-backend-ev85.onrender.com"
     )
 
-# Render's fromService:host gives only the hostname — add https:// if missing
+# Render's fromService:host gives only the hostname — try both HTTPS and HTTP when needed
 if _backend_url and not _backend_url.startswith("http"):
-    _backend_url = f"https://{_backend_url}"
-
-BASE_URL = _backend_url.rstrip("/")
+    _backend_url = _backend_url.strip()
 
 DEFAULT_USERNAME = "default_user"
+
+def normalize_backend_url(raw_url: str) -> str:
+    raw_url = raw_url.strip()
+    if raw_url.startswith(("http://", "https://")):
+        return raw_url.rstrip("/")
+
+    https_url = f"https://{raw_url.rstrip('/')}"
+    http_url = f"http://{raw_url.rstrip('/')}"
+
+    for candidate in (https_url, http_url):
+        try:
+            resp = requests.get(f"{candidate}/", timeout=5)
+            if resp.status_code == 200:
+                return candidate.rstrip("/")
+        except Exception:
+            continue
+
+    return https_url.rstrip("/")
+
+BASE_URL = normalize_backend_url(_backend_url)
+BACKEND_ERROR = None
 
 # -----------------------------------------------
 # PAGE CONFIG
@@ -38,10 +57,15 @@ st.set_page_config(
 # BACKEND HEALTH CHECK
 # -----------------------------------------------
 def backend_online() -> bool:
+    global BACKEND_ERROR
     try:
         r = requests.get(f"{BASE_URL}/", timeout=5)
-        return r.status_code == 200
-    except Exception:
+        if r.status_code == 200:
+            return True
+        BACKEND_ERROR = f"Unexpected status {r.status_code}"
+        return False
+    except Exception as e:
+        BACKEND_ERROR = str(e)
         return False
 
 BACKEND_UP = backend_online()
@@ -80,6 +104,9 @@ with st.sidebar:
 
     if not BACKEND_UP:
         st.warning("⚠️ Backend offline. Running in demo mode.")
+        st.caption(f"Backend check URL: `{BASE_URL}`")
+        if BACKEND_ERROR:
+            st.caption(f"Backend check error: `{BACKEND_ERROR}`")
 
     st.divider()
 

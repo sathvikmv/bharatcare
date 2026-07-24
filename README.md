@@ -16,6 +16,13 @@ This repository is configured for Netlify deployment using the `landing` fronten
 5. Set the publish directory to `landing/dist`.
 6. Optionally define environment variables in Netlify if you need to override `VITE_APP_URL` or `VITE_API_URL`.
 
+### Deployed full stack (example)
+- React landing page (Netlify): https://bharatcare-ai.netlify.app
+- Streamlit frontend: https://ai-agent-frontend-120e.onrender.com
+- FastAPI backend: https://ai-agent-backend-ev85.onrender.com
+
+The landing page can now point to the deployed Streamlit frontend by default.
+
 ### Local build
 ```bash
 cd landing

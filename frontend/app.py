@@ -11,7 +11,10 @@ import requests
 try:
     _backend_url = st.secrets["BACKEND_URL"]
 except Exception:
-    _backend_url = os.environ.get("BACKEND_URL", "http://127.0.0.1:8000")
+    _backend_url = os.environ.get(
+        "BACKEND_URL",
+        "https://ai-agent-backend-ev85.onrender.com"
+    )
 
 # Render's fromService:host gives only the hostname — add https:// if missing
 if _backend_url and not _backend_url.startswith("http"):

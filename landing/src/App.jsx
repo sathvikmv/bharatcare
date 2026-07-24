@@ -23,9 +23,9 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const rawAppUrl = import.meta.env.VITE_APP_URL || "http://localhost:8501";
+const rawAppUrl = import.meta.env.VITE_APP_URL || "https://ai-agent-frontend-120e.onrender.com";
 const APP_URL = rawAppUrl.startsWith("http") ? rawAppUrl : `https://${rawAppUrl}`;
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL || "https://ai-agent-backend-ev85.onrender.com";
 
 // --- DATA DEFINITIONS ---
 

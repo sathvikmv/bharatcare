@@ -42,3 +42,7 @@ landing/dist/
 
 # Streamlit secrets (never commit real secrets)
 frontend/.streamlit/secrets.toml
+node_modules
+
+# Local Netlify folder
+.netlify

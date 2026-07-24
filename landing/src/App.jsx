@@ -23,7 +23,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const APP_URL = import.meta.env.VITE_APP_URL || "http://localhost:8501";
+const rawAppUrl = import.meta.env.VITE_APP_URL || "http://localhost:8501";
+const APP_URL = rawAppUrl.startsWith("http") ? rawAppUrl : `https://${rawAppUrl}`;
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 // --- DATA DEFINITIONS ---

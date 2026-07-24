@@ -39,14 +39,12 @@ services:
   # ─────────────────────────────────────────
   # 3. React Landing Page (Static Site)
   # ─────────────────────────────────────────
-  - type: static
+  - type: web
     name: ai-agent-landing
+    env: static
     rootDir: landing
     buildCommand: npm install && npm run build
     staticPublishPath: dist
-    envVars:
-      - key: NODE_VERSION
-        value: 20.0.0
     autoDeploy: true
     routes:
       - type: rewrite

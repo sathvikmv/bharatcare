@@ -1,6 +1,4 @@
-const APP_URL = import.meta.env.VITE_APP_URL || "\$\{APP_URL\}";
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
-
+import React, { useState } from 'react';
 import { 
   Bot, 
   FileText, 
@@ -24,6 +22,9 @@ import {
   Minus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+const APP_URL = import.meta.env.VITE_APP_URL || "http://localhost:8501";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 // --- DATA DEFINITIONS ---
 

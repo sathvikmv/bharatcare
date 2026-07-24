@@ -211,7 +211,7 @@ export default function App() {
 
           <div className="hidden md:flex items-center space-x-4">
             <a 
-              href="\$\{APP_URL\}" 
+              href={APP_URL} 
               target="_blank" 
               rel="noreferrer"
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500 hover:opacity-90 font-medium text-sm transition-all shadow-lg hover:shadow-cyan-500/25 active:scale-95"
@@ -241,7 +241,7 @@ export default function App() {
             <a href="#dashboard" onClick={() => setMobileMenuOpen(false)}>Dashboard</a>
             <a href="#faq" onClick={() => setMobileMenuOpen(false)}>FAQ</a>
             <a 
-              href="\$\{APP_URL\}" 
+              href={APP_URL} 
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-500 text-white font-medium"
             >
               Launch App
@@ -274,7 +274,7 @@ export default function App() {
 
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2">
               <a 
-                href="\$\{APP_URL\}" 
+                href={APP_URL} 
                 target="_blank"
                 rel="noreferrer"
                 className="w-full sm:w-auto px-8 py-4 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500 hover:opacity-90 font-semibold text-base transition-all shadow-xl hover:shadow-purple-500/30 flex items-center justify-center space-x-2 group"
@@ -642,7 +642,7 @@ export default function App() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <a 
-              href="\$\{APP_URL\}" 
+              href={APP_URL} 
               target="_blank" 
               rel="noreferrer"
               className="w-full sm:w-auto px-8 py-4 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500 hover:opacity-90 font-semibold text-base transition-all shadow-xl"

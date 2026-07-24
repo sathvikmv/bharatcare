@@ -9,9 +9,15 @@ import requests
 #   3. Local dev fallback
 # -----------------------------------------------
 try:
-    BASE_URL = st.secrets["BACKEND_URL"].rstrip("/")
+    _backend_url = st.secrets["BACKEND_URL"]
 except Exception:
-    BASE_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:8000").rstrip("/")
+    _backend_url = os.environ.get("BACKEND_URL", "http://127.0.0.1:8000")
+
+# Render's fromService:host gives only the hostname — add https:// if missing
+if _backend_url and not _backend_url.startswith("http"):
+    _backend_url = f"https://{_backend_url}"
+
+BASE_URL = _backend_url.rstrip("/")
 
 DEFAULT_USERNAME = "default_user"
 

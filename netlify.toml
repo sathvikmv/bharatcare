@@ -1,0 +1,9 @@
+[build]
+  base = "landing"
+  command = "npm install && npm run build"
+  publish = "landing/dist"
+
+[dev]
+  command = "cd landing && npm run dev"
+  port = 5173
+  targetPort = 5173

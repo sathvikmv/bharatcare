@@ -1,65 +1,56 @@
 import streamlit as st
 import requests
 
+BASE_URL = "http://127.0.0.1:8000"
+DEFAULT_USERNAME = "default_user"
+
 # -----------------------------
 # SESSION STATE INITIALIZATION
 # -----------------------------
+if "chat_id" not in st.session_state:
+    st.session_state.chat_id = None
+
 if "messages" not in st.session_state:
+    st.session_state.messages = []
 
+if "uploaded_files" not in st.session_state:
+    st.session_state.uploaded_files = []
+
+# Create a default chat session on first load
+if st.session_state.chat_id is None:
     try:
-        response = requests.get("http://127.0.0.1:8000/history")
-
-        if response.status_code == 200:
-
-            history = response.json()["history"]
-
-            st.session_state.messages = [
-                {
-                    "role": chat["role"],
-                    "content": chat["message"]
-                }
-                for chat in history
-            ]
-
-        else:
-            st.session_state.messages = []
-
-    except:
-        st.session_state.messages = []
-
-if "uploaded_pdfs" not in st.session_state:
-    st.session_state.uploaded_pdfs = []
+        r = requests.post(
+            f"{BASE_URL}/chat/create",
+            json={"username": DEFAULT_USERNAME, "title": "My Chat"}
+        )
+        if r.status_code == 201:
+            st.session_state.chat_id = r.json()["id"]
+    except Exception:
+        pass
 
 # -----------------------------
 # SIDEBAR
 # -----------------------------
 with st.sidebar:
-
     st.title("🤖 AI Chatbot")
 
     page = st.radio(
         "Navigation",
-        ["Chat", "Upload PDF", "Dashboard"]
+        ["Chat", "Upload File", "Dashboard"]
     )
 
     if st.button("🗑 Clear Chat"):
-
-        try:
-
-            response = requests.delete(
-                "http://127.0.0.1:8000/clear_history"
-            )
-
-            if response.status_code == 200:
-                st.success("✅ Chat history cleared successfully!")
-
-        except Exception as e:
-            st.error(f"❌ Failed to clear chat: {e}")
-
-        # Clear Streamlit session
+        if st.session_state.chat_id:
+            try:
+                requests.delete(
+                    f"{BASE_URL}/chat/{st.session_state.chat_id}",
+                    params={"username": DEFAULT_USERNAME}
+                )
+            except Exception:
+                pass
         st.session_state.messages = []
-        st.session_state.uploaded_pdfs = []
-
+        st.session_state.chat_id = None
+        st.session_state.uploaded_files = []
         st.rerun()
 
 # -----------------------------
@@ -75,112 +66,117 @@ if page == "Chat":
             st.write(msg["content"])
 
     # Chat input
-    message = st.chat_input("Type a message")
+    user_input = st.chat_input("Type a message")
 
-    if message:
+    if user_input:
+        # Ensure chat session exists
+        if st.session_state.chat_id is None:
+            try:
+                r = requests.post(
+                    f"{BASE_URL}/chat/create",
+                    json={"username": DEFAULT_USERNAME, "title": "My Chat"}
+                )
+                if r.status_code == 201:
+                    st.session_state.chat_id = r.json()["id"]
+            except Exception:
+                st.error("❌ Could not create chat session.")
+                st.stop()
 
-        # Store user message
-        st.session_state.messages.append(
-            {
-                "role": "user",
-                "content": message
-            }
-        )
-
+        # Save user message to backend
         try:
+            requests.post(
+                f"{BASE_URL}/chat/{st.session_state.chat_id}/message",
+                params={"username": DEFAULT_USERNAME},
+                json={"role": "user", "content": user_input}
+            )
+        except Exception:
+            pass
 
-            # If PDF uploaded → Ask PDF
-            if st.session_state.uploaded_pdfs:
+        st.session_state.messages.append({"role": "user", "content": user_input})
 
-                response = requests.post(
-                    "http://127.0.0.1:8000/ask_pdf",
-                    json={
-                        "question": message
-                    }
+        # Retrieve context from RAG if files uploaded
+        context_str = ""
+        if st.session_state.uploaded_files:
+            try:
+                rag_resp = requests.post(
+                    f"{BASE_URL}/rag/retrieve",
+                    json={"query": user_input}
                 )
+                if rag_resp.status_code == 200:
+                    chunks = rag_resp.json().get("context", [])
+                    if chunks:
+                        context_str = "\n\n".join(chunks[:3])
+            except Exception:
+                pass
 
-            # Otherwise → Normal Chat
-            else:
+        # Build reply
+        if context_str:
+            bot_reply = (
+                f"📄 **Relevant context from your uploaded documents:**\n\n{context_str}"
+            )
+        else:
+            bot_reply = (
+                "🤖 I'm your AI assistant! I don't have an LLM connected yet, but "
+                "your message has been saved. Upload a document and ask a question to "
+                "get context-based answers."
+            )
 
-                response = requests.post(
-                    "http://127.0.0.1:8000/chat",
-                    json={
-                        "message": message
-                    }
-                )
+        # Save bot reply to backend
+        try:
+            requests.post(
+                f"{BASE_URL}/chat/{st.session_state.chat_id}/message",
+                params={"username": DEFAULT_USERNAME},
+                json={"role": "assistant", "content": bot_reply}
+            )
+        except Exception:
+            pass
 
-            data = response.json()
-
-            if "reply" in data:
-                bot_response = data["reply"]
-
-            elif "error" in data:
-                bot_response = f"❌ {data['error']}"
-
-            else:
-                bot_response = "Unexpected response from backend."
-
-        except Exception as e:
-            bot_response = f"❌ Backend Error: {e}"
-
-        # Store assistant response
-        st.session_state.messages.append(
-            {
-                "role": "assistant",
-                "content": bot_response
-            }
-        )
-
+        st.session_state.messages.append({"role": "assistant", "content": bot_reply})
         st.rerun()
 
 # -----------------------------
-# PDF UPLOAD PAGE
+# FILE UPLOAD PAGE
 # -----------------------------
-elif page == "Upload PDF":
+elif page == "Upload File":
 
-    st.title("📄 Upload PDF")
+    st.title("📄 Upload Document")
+    st.caption("Supported formats: PDF, TXT, DOCX, CSV")
 
     uploaded_file = st.file_uploader(
-        "Choose PDF",
-        type=["pdf"]
+        "Choose a file",
+        type=["pdf", "txt", "docx", "csv"]
     )
 
     if uploaded_file:
-
         files = {
             "file": (
                 uploaded_file.name,
                 uploaded_file.getvalue(),
-                "application/pdf"
+                uploaded_file.type or "application/octet-stream"
             )
         }
 
-        try:
+        with st.spinner("Uploading and processing..."):
+            try:
+                response = requests.post(
+                    f"{BASE_URL}/upload/",
+                    files=files
+                )
+                data = response.json()
 
-            response = requests.post(
-                "http://127.0.0.1:8000/upload_pdf",
-                files=files
-            )
+                if response.status_code == 201:
+                    st.success(f"✅ File uploaded successfully!")
+                    st.info(f"📄 **Filename:** {data['filename']}")
+                    st.info(f"📦 **Size:** {data['size']} bytes")
+                    st.info(f"🕒 **Uploaded At:** {data['uploaded_at']}")
 
-            data = response.json()
+                    if uploaded_file.name not in st.session_state.uploaded_files:
+                        st.session_state.uploaded_files.append(uploaded_file.name)
+                else:
+                    st.error(f"❌ Upload failed: {data.get('detail', data)}")
 
-            if response.status_code == 200:
-
-                st.success(data["message"])
-
-                if uploaded_file.name not in st.session_state.uploaded_pdfs:
-                    st.session_state.uploaded_pdfs.append(
-                        uploaded_file.name
-                    )
-
-                st.info(f"📄 File Name: {data['filename']}")
-                st.info(f"📝 Characters Extracted: {data['characters_extracted']}")
-
-            else:
-                st.error(data)
-
-        except Exception as e:
-            st.error(f"❌ Upload failed: {e}")
+            except Exception as e:
+                st.error(f"❌ Upload error: {e}")
 
 # -----------------------------
 # DASHBOARD PAGE
@@ -189,60 +185,48 @@ elif page == "Dashboard":
 
     st.title("📊 Dashboard")
 
-    col1, col2, col3 = st.columns(3)
+    # Fetch live metrics from backend
+    try:
+        metrics_resp = requests.get(f"{BASE_URL}/dashboard/", timeout=5)
+        if metrics_resp.status_code == 200:
+            metrics = metrics_resp.json()
+        else:
+            metrics = None
+    except Exception:
+        metrics = None
 
-    with col1:
-        st.metric(
-            "Total Messages",
-            len(st.session_state.messages)
-        )
-
-    with col2:
-        st.metric(
-            "Uploaded PDFs",
-            len(st.session_state.uploaded_pdfs)
-        )
-
-    with col3:
-        st.metric(
-            "Conversations",
-            len(st.session_state.messages) // 2
-        )
+    if metrics:
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("💬 Total Chats", metrics.get("total_chats", 0))
+        col2.metric("📨 Total Messages", metrics.get("total_messages", 0))
+        col3.metric("📁 Uploaded Files", metrics.get("total_uploaded_files", 0))
+        col4.metric("🧠 Vector Chunks", metrics.get("total_documents_in_vector_db", 0))
+    else:
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Messages", len(st.session_state.messages))
+        col2.metric("Uploaded Files", len(st.session_state.uploaded_files))
+        col3.metric("Conversations", len(st.session_state.messages) // 2)
 
     st.divider()
 
-    st.subheader("📂 Uploaded Files")
-
-    if st.session_state.uploaded_pdfs:
-
-        st.table(
-            {
-                "Uploaded PDFs": st.session_state.uploaded_pdfs
-            }
-        )
-
+    st.subheader("📂 Uploaded Files This Session")
+    if st.session_state.uploaded_files:
+        st.table({"Uploaded Files": st.session_state.uploaded_files})
     else:
-        st.info("No PDFs uploaded yet.")
+        st.info("No files uploaded yet.")
 
     st.divider()
 
     st.subheader("💬 Chat Export")
-
     if st.session_state.messages:
-
         chat_text = "\n".join(
-            [
-                f"{msg['role']}: {msg['content']}"
-                for msg in st.session_state.messages
-            ]
+            [f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages]
         )
-
         st.download_button(
             label="📥 Download Chat History",
             data=chat_text,
             file_name="chat_history.txt",
             mime="text/plain"
         )
-
     else:
         st.info("No chat messages available.")

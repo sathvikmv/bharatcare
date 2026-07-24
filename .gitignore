@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+.venv-1/
+venv/
+ENV/
+
+# Database & Storage
+*.db
+*.sqlite3
+chroma_db/
+backend/uploads/*
+!backend/uploads/.gitkeep
+memory.json
+
+# Node / React
+landing/node_modules/
+landing/dist/
+.DS_Store

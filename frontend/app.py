@@ -1,12 +1,42 @@
 import streamlit as st
 import requests
 
-BASE_URL = "http://127.0.0.1:8000"
+# -----------------------------------------------
+# BACKEND URL — reads from Streamlit secrets or
+# falls back to local dev server
+# -----------------------------------------------
+try:
+    BASE_URL = st.secrets["BACKEND_URL"].rstrip("/")
+except Exception:
+    BASE_URL = "http://127.0.0.1:8000"
+
 DEFAULT_USERNAME = "default_user"
 
-# -----------------------------
+# -----------------------------------------------
+# PAGE CONFIG
+# -----------------------------------------------
+st.set_page_config(
+    page_title="AI Agent with Tool Orchestration",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# -----------------------------------------------
+# BACKEND HEALTH CHECK
+# -----------------------------------------------
+def backend_online() -> bool:
+    try:
+        r = requests.get(f"{BASE_URL}/", timeout=5)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+BACKEND_UP = backend_online()
+
+# -----------------------------------------------
 # SESSION STATE INITIALIZATION
-# -----------------------------
+# -----------------------------------------------
 if "chat_id" not in st.session_state:
     st.session_state.chat_id = None
 
@@ -16,35 +46,45 @@ if "messages" not in st.session_state:
 if "uploaded_files" not in st.session_state:
     st.session_state.uploaded_files = []
 
-# Create a default chat session on first load
-if st.session_state.chat_id is None:
+# Create default chat session on first load
+if BACKEND_UP and st.session_state.chat_id is None:
     try:
         r = requests.post(
             f"{BASE_URL}/chat/create",
-            json={"username": DEFAULT_USERNAME, "title": "My Chat"}
+            json={"username": DEFAULT_USERNAME, "title": "My Chat"},
+            timeout=5,
         )
         if r.status_code == 201:
             st.session_state.chat_id = r.json()["id"]
     except Exception:
         pass
 
-# -----------------------------
+# -----------------------------------------------
 # SIDEBAR
-# -----------------------------
+# -----------------------------------------------
 with st.sidebar:
     st.title("🤖 AI Chatbot")
+    st.caption("Powered by FastAPI + ChromaDB + RAG")
+
+    if not BACKEND_UP:
+        st.warning("⚠️ Backend offline. Running in demo mode.")
+
+    st.divider()
 
     page = st.radio(
         "Navigation",
-        ["Chat", "Upload File", "Dashboard"]
+        ["💬 Chat", "📄 Upload File", "📊 Dashboard"],
     )
 
-    if st.button("🗑 Clear Chat"):
-        if st.session_state.chat_id:
+    st.divider()
+
+    if st.button("🗑 Clear Chat", use_container_width=True):
+        if BACKEND_UP and st.session_state.chat_id:
             try:
                 requests.delete(
                     f"{BASE_URL}/chat/{st.session_state.chat_id}",
-                    params={"username": DEFAULT_USERNAME}
+                    params={"username": DEFAULT_USERNAME},
+                    timeout=5,
                 )
             except Exception:
                 pass
@@ -53,54 +93,61 @@ with st.sidebar:
         st.session_state.uploaded_files = []
         st.rerun()
 
-# -----------------------------
-# CHAT PAGE
-# -----------------------------
-if page == "Chat":
+    st.divider()
+    st.caption(f"🔗 Backend: `{BASE_URL}`")
 
+# -----------------------------------------------
+# CHAT PAGE
+# -----------------------------------------------
+if page == "💬 Chat":
     st.title("🤖 My AI Chatbot")
+
+    if not BACKEND_UP:
+        st.info("🔌 Backend is not reachable. Messages are stored locally in this session only.")
 
     # Display chat history
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
-            st.write(msg["content"])
+            st.markdown(msg["content"])
 
-    # Chat input
-    user_input = st.chat_input("Type a message")
+    user_input = st.chat_input("Type a message…")
 
     if user_input:
         # Ensure chat session exists
-        if st.session_state.chat_id is None:
+        if BACKEND_UP and st.session_state.chat_id is None:
             try:
                 r = requests.post(
                     f"{BASE_URL}/chat/create",
-                    json={"username": DEFAULT_USERNAME, "title": "My Chat"}
+                    json={"username": DEFAULT_USERNAME, "title": "My Chat"},
+                    timeout=5,
                 )
                 if r.status_code == 201:
                     st.session_state.chat_id = r.json()["id"]
             except Exception:
                 st.error("❌ Could not create chat session.")
-                st.stop()
 
         # Save user message to backend
-        try:
-            requests.post(
-                f"{BASE_URL}/chat/{st.session_state.chat_id}/message",
-                params={"username": DEFAULT_USERNAME},
-                json={"role": "user", "content": user_input}
-            )
-        except Exception:
-            pass
+        if BACKEND_UP and st.session_state.chat_id:
+            try:
+                requests.post(
+                    f"{BASE_URL}/chat/{st.session_state.chat_id}/message",
+                    params={"username": DEFAULT_USERNAME},
+                    json={"role": "user", "content": user_input},
+                    timeout=5,
+                )
+            except Exception:
+                pass
 
         st.session_state.messages.append({"role": "user", "content": user_input})
 
-        # Retrieve context from RAG if files uploaded
+        # RAG context retrieval if files uploaded
         context_str = ""
-        if st.session_state.uploaded_files:
+        if BACKEND_UP and st.session_state.uploaded_files:
             try:
                 rag_resp = requests.post(
                     f"{BASE_URL}/rag/retrieve",
-                    json={"query": user_input}
+                    json={"query": user_input},
+                    timeout=10,
                 )
                 if rag_resp.status_code == 200:
                     chunks = rag_resp.json().get("context", [])
@@ -112,100 +159,110 @@ if page == "Chat":
         # Build reply
         if context_str:
             bot_reply = (
-                f"📄 **Relevant context from your uploaded documents:**\n\n{context_str}"
+                "📄 **Relevant context from your uploaded documents:**\n\n"
+                f"{context_str}"
+            )
+        elif not BACKEND_UP:
+            bot_reply = (
+                "🤖 **Demo Mode** — Backend is not connected.\n\n"
+                "To get real AI responses, deploy the FastAPI backend and set the "
+                "`BACKEND_URL` secret in Streamlit Cloud."
             )
         else:
             bot_reply = (
-                "🤖 I'm your AI assistant! I don't have an LLM connected yet, but "
-                "your message has been saved. Upload a document and ask a question to "
-                "get context-based answers."
+                "🤖 I'm your AI assistant! Your message has been saved. "
+                "Upload a document and ask a question to get context-based answers."
             )
 
         # Save bot reply to backend
-        try:
-            requests.post(
-                f"{BASE_URL}/chat/{st.session_state.chat_id}/message",
-                params={"username": DEFAULT_USERNAME},
-                json={"role": "assistant", "content": bot_reply}
-            )
-        except Exception:
-            pass
+        if BACKEND_UP and st.session_state.chat_id:
+            try:
+                requests.post(
+                    f"{BASE_URL}/chat/{st.session_state.chat_id}/message",
+                    params={"username": DEFAULT_USERNAME},
+                    json={"role": "assistant", "content": bot_reply},
+                    timeout=5,
+                )
+            except Exception:
+                pass
 
         st.session_state.messages.append({"role": "assistant", "content": bot_reply})
         st.rerun()
 
-# -----------------------------
-# FILE UPLOAD PAGE
-# -----------------------------
-elif page == "Upload File":
-
+# -----------------------------------------------
+# UPLOAD PAGE
+# -----------------------------------------------
+elif page == "📄 Upload File":
     st.title("📄 Upload Document")
-    st.caption("Supported formats: PDF, TXT, DOCX, CSV")
+    st.caption("Supported formats: PDF · TXT · DOCX · CSV")
 
-    uploaded_file = st.file_uploader(
-        "Choose a file",
-        type=["pdf", "txt", "docx", "csv"]
-    )
+    if not BACKEND_UP:
+        st.warning("⚠️ Backend is offline. File uploads are unavailable in demo mode.")
+    else:
+        uploaded_file = st.file_uploader(
+            "Choose a file",
+            type=["pdf", "txt", "docx", "csv"],
+        )
 
-    if uploaded_file:
-        files = {
-            "file": (
-                uploaded_file.name,
-                uploaded_file.getvalue(),
-                uploaded_file.type or "application/octet-stream"
-            )
-        }
-
-        with st.spinner("Uploading and processing..."):
-            try:
-                response = requests.post(
-                    f"{BASE_URL}/upload/",
-                    files=files
+        if uploaded_file:
+            files = {
+                "file": (
+                    uploaded_file.name,
+                    uploaded_file.getvalue(),
+                    uploaded_file.type or "application/octet-stream",
                 )
-                data = response.json()
+            }
 
-                if response.status_code == 201:
-                    st.success(f"✅ File uploaded successfully!")
-                    st.info(f"📄 **Filename:** {data['filename']}")
-                    st.info(f"📦 **Size:** {data['size']} bytes")
-                    st.info(f"🕒 **Uploaded At:** {data['uploaded_at']}")
+            with st.spinner("⏳ Uploading and processing…"):
+                try:
+                    response = requests.post(
+                        f"{BASE_URL}/upload/",
+                        files=files,
+                        timeout=60,
+                    )
+                    data = response.json()
 
-                    if uploaded_file.name not in st.session_state.uploaded_files:
-                        st.session_state.uploaded_files.append(uploaded_file.name)
-                else:
-                    st.error(f"❌ Upload failed: {data.get('detail', data)}")
+                    if response.status_code == 201:
+                        st.success("✅ File uploaded and indexed successfully!")
+                        col1, col2 = st.columns(2)
+                        col1.info(f"📄 **Filename:** `{data['filename']}`")
+                        col2.info(f"📦 **Size:** {data['size']:,} bytes")
+                        st.info(f"🕒 **Uploaded At:** {data['uploaded_at']}")
 
-            except Exception as e:
-                st.error(f"❌ Upload error: {e}")
+                        if uploaded_file.name not in st.session_state.uploaded_files:
+                            st.session_state.uploaded_files.append(uploaded_file.name)
+                    else:
+                        st.error(f"❌ Upload failed: {data.get('detail', data)}")
 
-# -----------------------------
+                except Exception as e:
+                    st.error(f"❌ Upload error: {e}")
+
+# -----------------------------------------------
 # DASHBOARD PAGE
-# -----------------------------
-elif page == "Dashboard":
-
+# -----------------------------------------------
+elif page == "📊 Dashboard":
     st.title("📊 Dashboard")
 
-    # Fetch live metrics from backend
-    try:
-        metrics_resp = requests.get(f"{BASE_URL}/dashboard/", timeout=5)
-        if metrics_resp.status_code == 200:
-            metrics = metrics_resp.json()
-        else:
-            metrics = None
-    except Exception:
-        metrics = None
-
-    if metrics:
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("💬 Total Chats", metrics.get("total_chats", 0))
-        col2.metric("📨 Total Messages", metrics.get("total_messages", 0))
-        col3.metric("📁 Uploaded Files", metrics.get("total_uploaded_files", 0))
-        col4.metric("🧠 Vector Chunks", metrics.get("total_documents_in_vector_db", 0))
+    if BACKEND_UP:
+        try:
+            metrics_resp = requests.get(f"{BASE_URL}/dashboard/", timeout=5)
+            if metrics_resp.status_code == 200:
+                metrics = metrics_resp.json()
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("💬 Total Chats", metrics.get("total_chats", 0))
+                col2.metric("📨 Total Messages", metrics.get("total_messages", 0))
+                col3.metric("📁 Uploaded Files", metrics.get("total_uploaded_files", 0))
+                col4.metric("🧠 Vector Chunks", metrics.get("total_documents_in_vector_db", 0))
+            else:
+                st.error("❌ Could not fetch metrics from backend.")
+        except Exception as e:
+            st.error(f"❌ Dashboard error: {e}")
     else:
+        st.warning("⚠️ Backend offline — showing session stats only.")
         col1, col2, col3 = st.columns(3)
-        col1.metric("Total Messages", len(st.session_state.messages))
-        col2.metric("Uploaded Files", len(st.session_state.uploaded_files))
-        col3.metric("Conversations", len(st.session_state.messages) // 2)
+        col1.metric("Total Messages (session)", len(st.session_state.messages))
+        col2.metric("Uploaded Files (session)", len(st.session_state.uploaded_files))
+        col3.metric("Conversations (session)", len(st.session_state.messages) // 2)
 
     st.divider()
 
@@ -213,20 +270,21 @@ elif page == "Dashboard":
     if st.session_state.uploaded_files:
         st.table({"Uploaded Files": st.session_state.uploaded_files})
     else:
-        st.info("No files uploaded yet.")
+        st.info("No files uploaded yet in this session.")
 
     st.divider()
 
-    st.subheader("💬 Chat Export")
+    st.subheader("💬 Export Chat History")
     if st.session_state.messages:
         chat_text = "\n".join(
-            [f"{msg['role']}: {msg['content']}" for msg in st.session_state.messages]
+            [f"{m['role'].upper()}: {m['content']}" for m in st.session_state.messages]
         )
         st.download_button(
             label="📥 Download Chat History",
             data=chat_text,
             file_name="chat_history.txt",
-            mime="text/plain"
+            mime="text/plain",
+            use_container_width=True,
         )
     else:
-        st.info("No chat messages available.")
+        st.info("No chat messages to export.")

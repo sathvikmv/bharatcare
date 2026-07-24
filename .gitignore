@@ -39,3 +39,6 @@ memory.json
 landing/node_modules/
 landing/dist/
 .DS_Store
+
+# Streamlit secrets (never commit real secrets)
+frontend/.streamlit/secrets.toml
